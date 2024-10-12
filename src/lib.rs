@@ -4,7 +4,7 @@ mod tests {
     use bs58;
     use std::io::{self, BufRead};
     use solana_sdk; 
-    use solana_sdk::{signature::{Keypair, Signer, read_keypair_file}, transaction::Transaction};
+    use solana_sdk::{ message::Message, signature::{Keypair, Signer, read_keypair_file}, transaction::Transaction};
     use solana_program::{ pubkey::Pubkey, system_instruction::transfer};
     use solana_client::rpc_client::RpcClient;
     use std::str::FromStr;
@@ -55,8 +55,18 @@ mod tests {
         let to_pubkey = Pubkey::from_str("ExyE8BT5a3LYZjymM2XsZUNhTWLj1xjKv9BecfY7J5xd").unwrap();
         let rpc_client = RpcClient::new(RPC_URL);
         let recent_blockhash = rpc_client.get_latest_blockhash().expect("Failed to get the recent blockhash");
+        let balance = rpc_client 
+        .get_balance(&keypair.pubkey()) 
+        .expect("Failed to get balance"); 
+        let message = Message::new_with_blockhash(
+            &[transfer(&keypair.pubkey(), &to_pubkey, balance)],
+        Some(&keypair.pubkey()),  &recent_blockhash
+        );
+        // Calculating exact fee rate to transfer entire SOL amount out of account
+        let fee = rpc_client.get_fee_for_message(&message).expect("Failed to calculate the fee");
+        // Deducting the feefrom lamports amount TX with correct balance
         let transaction = Transaction::new_signed_with_payer( &[transfer(
-            &keypair.pubkey(),&to_pubkey, 1_000_000
+            &keypair.pubkey(),&to_pubkey, balance - fee,
         )], Some(&keypair.pubkey()), &vec![&keypair], recent_blockhash);
         let signature = rpc_client.send_and_confirm_transaction(&transaction).expect("Failed to send transaction");
         println!("Success, your txn is here:");
